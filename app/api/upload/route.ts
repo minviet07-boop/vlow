@@ -1,6 +1,8 @@
 import { put } from "@vercel/blob";
-import path from "path";
 import { NextResponse } from "next/server";
+
+export const runtime = "nodejs";
+export const dynamic = "force-dynamic";
 
 export async function POST(request: Request) {
   try {
@@ -12,14 +14,20 @@ export async function POST(request: Request) {
     if (!file.type.startsWith("image/")) {
       return NextResponse.json({ error: "이미지 파일만 업로드할 수 있습니다." }, { status: 400 });
     }
-    const ext = path.extname(file.name).toLowerCase() || ".jpg";
+
+    const original = file.name || "image.jpg";
+    const dot = original.lastIndexOf(".");
+    const ext = (dot >= 0 ? original.slice(dot) : ".jpg").toLowerCase();
     const allowed = [".jpg", ".jpeg", ".png", ".gif", ".webp", ".bmp"];
     const safeExt = allowed.includes(ext) ? ext : ".jpg";
-    const name = `${Date.now()}-${Math.random().toString(36).slice(2, 8)}${safeExt}`;
-    const blob = await put(name, file, {
+    const pathname = `uploads/${Date.now()}-${Math.random().toString(36).slice(2, 8)}${safeExt}`;
+
+    const blob = await put(pathname, file, {
       access: "public",
+      addRandomSuffix: true,
       contentType: file.type || "image/jpeg",
     });
+
     return NextResponse.json({ url: blob.url });
   } catch (err) {
     const message = err instanceof Error ? err.message : String(err);
