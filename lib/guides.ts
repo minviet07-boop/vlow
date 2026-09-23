@@ -103,7 +103,7 @@ function normalize(guide: ServiceGuideData & Record<string, unknown>): ServiceGu
 function readLocal(): ServiceGuideData[] {
   if (typeof window === "undefined") return DEFAULT_GUIDES;
   try {
-    const raw = null;
+    const raw = window.localStorage.getItem(LOCAL_KEY);
     if (!raw) return DEFAULT_GUIDES;
     const parsed = JSON.parse(raw) as ServiceGuideData[];
     const bySlug = new Map(parsed.map((g) => [g.slug, normalize(g)]));
@@ -121,30 +121,31 @@ export function listGuides(): ServiceGuideData[] {
   return readLocal();
 }
 
-export async function getGuide(slug: string): Promise<ServiceGuideData | undefined> {
+export function getGuide(slug: string): ServiceGuideData | undefined {
   if (typeof window !== "undefined") {
-    const fromItem = await readItemGuideBySlug(slug);
+    const fromItem = readItemGuideBySlug(slug);
     if (fromItem) return fromItem;
+    try {
+      const raw = window.localStorage.getItem(LOCAL_KEY);
+      if (raw) {
+        const parsed = JSON.parse(raw) as ServiceGuideData[];
+        const found = parsed.find((g) => g.slug === slug);
+        if (found) return normalize(found);
+      }
+    } catch {
+      /* ignore */
+    }
     return undefined;
   }
   return DEFAULT_GUIDES.find((g) => g.slug === slug);
 }
 
-export async function saveGuide(next: ServiceGuideData) {
-  const matchedSubItem = displayNameForSlug(next.slug) || next.title;
-  const payload: AdminGuidePayload = {
-    title: next.title,
-    subItem: matchedSubItem,
-    desc: next.subtitle,
-    period: next.period,
-    authority: next.authority,
-    steps: (next.steps || []).map((s, i) => ({
-      stepNum: s.step || `Step ${i + 1}`,
-      title: s.title,
-      desc: s.desc,
-    })),
-  };
-  await saveItemGuide(payload);
+export function saveGuide(next: ServiceGuideData) {
+  const all = readLocal();
+  const updated = all.some((g) => g.slug === next.slug)
+    ? all.map((g) => (g.slug === next.slug ? next : g))
+    : [...all, next];
+  window.localStorage.setItem(LOCAL_KEY, JSON.stringify(updated));
 }
 
 export const GUIDE_CATEGORIES = [
@@ -310,30 +311,23 @@ export async function readPosts(subItem: string): Promise<GuidePost[]> {
   }
 }
 
-export async function readItemGuideAsync(subItem: string): Promise<AdminGuidePayload | null> {
+export function readItemGuide(subItem: string): AdminGuidePayload | null {
+  if (typeof window === "undefined") return null;
   try {
-    const posts = await readPosts(subItem);
-    if (!posts || posts.length === 0) return null;
-    const first = posts[0];
-    return {
-      title: first.title,
-      subItem,
-      desc: first.desc,
-      period: first.period,
-      authority: first.authority,
-      steps: first.steps,
-    };
+    const raw = window.localStorage.getItem(itemStorageKey(subItem));
+    if (!raw) return null;
+    return JSON.parse(raw) as AdminGuidePayload;
   } catch {
     return null;
   }
 }
 
-async function readItemGuideBySlug(slug: string): Promise<ServiceGuideData | undefined> {
+function readItemGuideBySlug(slug: string): ServiceGuideData | undefined {
   const names = Object.entries(SUB_SLUGS)
     .filter(([, value]) => value === slug)
     .map(([name]) => name);
   for (const name of names) {
-    const item = await readItemGuideAsync(name);
+    const item = readItemGuide(name);
     if (item) return adminPayloadToGuide(item, name);
   }
   return undefined;
@@ -359,17 +353,9 @@ export function adminPayloadToGuide(item: AdminGuidePayload, subItem: string): S
   };
 }
 
-export async function saveItemGuide(payload: AdminGuidePayload) {
-  const post: GuidePost = {
-    id: Date.now().toString(),
-    createdAt: new Date().toLocaleDateString("ko-KR"),
-    title: payload.title,
-    desc: payload.desc,
-    period: payload.period,
-    authority: payload.authority,
-    steps: payload.steps,
-  };
-  await savePosts(payload.subItem, [post]);
+export function saveItemGuide(payload: AdminGuidePayload) {
+  window.localStorage.setItem(itemStorageKey(payload.subItem), JSON.stringify(payload));
+  saveGuide(adminPayloadToGuide(payload, payload.subItem));
 }
 
 export function defaultItemGuide(subItem: string): AdminGuidePayload {
@@ -393,7 +379,7 @@ export function deleteItemGuide(subItem: string) {
   }
   window.localStorage.removeItem(itemStorageKey(subItem));
   try {
-    const raw = null;
+    const raw = window.localStorage.getItem(LOCAL_KEY);
     if (!raw) return;
     const parsed = JSON.parse(raw) as ServiceGuideData[];
     window.localStorage.setItem(LOCAL_KEY, JSON.stringify(parsed.filter((g) => g.slug !== slug)));
@@ -425,18 +411,17 @@ export function emptyGuide(
   };
 }
 
-export async function getOrCreateGuide(
+export function getOrCreateGuide(
   subItem: string,
   categoryName: string,
   accent: ServiceGuideData["accent"],
-): Promise<ServiceGuideData> {
+) {
   const slug = slugForSubItem(subItem);
-  const existing = await getGuide(slug);
-  return existing ?? emptyGuide(slug, subItem, categoryName, accent);
+  return getGuide(slug) ?? emptyGuide(slug, subItem, categoryName, accent);
 }
 
-export async function resolveGuide(slug: string): Promise<ServiceGuideData | undefined> {
-  const existing = await getGuide(slug);
+export function resolveGuide(slug: string): ServiceGuideData | undefined {
+  const existing = getGuide(slug);
   if (existing) return existing;
   const found = GUIDE_CATEGORIES.flatMap((c) => c.subItems).find((name) => slugForSubItem(name) === slug);
   const fallback = found || Object.entries(SUB_SLUGS).find(([, value]) => value === slug)?.[0];
