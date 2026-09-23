@@ -20,9 +20,10 @@ export async function POST(request: Request) {
     const ext = (dot >= 0 ? original.slice(dot) : ".jpg").toLowerCase();
     const allowed = [".jpg", ".jpeg", ".png", ".gif", ".webp", ".bmp"];
     const safeExt = allowed.includes(ext) ? ext : ".jpg";
-    const pathname = `uploads/${Date.now()}-${Math.random().toString(36).slice(2, 8)}${safeExt}`;
+    const pathname = `vlaw-images/${Date.now()}-${Math.random().toString(36).slice(2, 8)}${safeExt}`;
+    const body = Buffer.from(await file.arrayBuffer());
 
-    const blob = await put(pathname, file, {
+    const blob = await put(pathname, body, {
       access: "public",
       addRandomSuffix: true,
       contentType: file.type || "image/jpeg",

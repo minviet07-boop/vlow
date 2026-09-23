@@ -40,6 +40,31 @@ function insertImageMarkdown(
   });
 }
 
+async function uploadImageViaBlobApi(file: File): Promise<string> {
+  const formData = new FormData();
+  formData.append("image", file);
+  const res = await fetch("/api/upload", {
+    method: "POST",
+    body: formData,
+    cache: "no-store",
+  });
+  const raw = await res.text();
+  let json: { url?: string; error?: string } = {};
+  try {
+    json = JSON.parse(raw) as { url?: string; error?: string };
+  } catch {
+    json = {};
+  }
+  if (!res.ok || !json.url) {
+    throw new Error(json.error || raw || `업로드 실패 (${res.status})`);
+  }
+  const url = json.url.trim();
+  if (url.includes("/public/uploads") || url.startsWith("/uploads/")) {
+    throw new Error("로컬 업로드 경로가 반환되었습니다. Vercel Blob /api/upload를 확인하세요.");
+  }
+  return url;
+}
+
 function insertSnippetAtCursor(
   el: HTMLInputElement | HTMLTextAreaElement | null,
   value: string,
@@ -221,23 +246,8 @@ export default function ExpertGuidesAdmin() {
     const uploadKey = typeof target === "number" ? `step-${target}` : target;
     setUploading(uploadKey);
     try {
-      const formData = new FormData();
-      formData.append("image", file);
-      const res = await fetch("/api/upload", {
-        method: "POST",
-        body: formData,
-      });
-      const raw = await res.text();
-      let json: { url?: string; error?: string } = {};
-      try {
-        json = JSON.parse(raw) as { url?: string; error?: string };
-      } catch {
-        json = {};
-      }
-      if (!res.ok || !json.url) {
-        throw new Error(json.error || raw || `업로드 실패 (${res.status})`);
-      }
-      const snippet = `![이미지](${json.url})`;
+      const url = await uploadImageViaBlobApi(file);
+      const snippet = `![이미지](${url})`;
       if (target === "title") {
         const el = titleRef.current;
         insertSnippetAtCursor(el, el?.value ?? "", setGuideTitle, snippet);
