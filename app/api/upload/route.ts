@@ -22,13 +22,6 @@ async function putToBlob(file: File) {
   });
 }
 
-export async function GET() {
-  return NextResponse.json(
-    { ok: true, storage: "vercel-blob", fs: false },
-    { headers: { "x-vlaw-storage": "vercel-blob", "Cache-Control": "no-store" } },
-  );
-}
-
 export async function POST(request: Request) {
   try {
     const contentType = request.headers.get("content-type") || "";
@@ -43,10 +36,7 @@ export async function POST(request: Request) {
         return NextResponse.json({ error: "이미지 파일만 업로드할 수 있습니다." }, { status: 400 });
       }
       const blob = await putToBlob(file);
-      return NextResponse.json(
-        { url: blob.url, storage: "vercel-blob" },
-        { headers: { "x-vlaw-storage": "vercel-blob", "Cache-Control": "no-store" } },
-      );
+      return NextResponse.json({ url: blob.url });
     }
 
     const body = (await request.json()) as HandleUploadBody;
@@ -60,9 +50,7 @@ export async function POST(request: Request) {
         tokenPayload: JSON.stringify({}),
       }),
     });
-    return NextResponse.json(jsonResponse, {
-      headers: { "x-vlaw-storage": "vercel-blob", "Cache-Control": "no-store" },
-    });
+    return NextResponse.json(jsonResponse);
   } catch (err) {
     const message = err instanceof Error ? err.message : String(err);
     return NextResponse.json({ error: message }, { status: 500 });
