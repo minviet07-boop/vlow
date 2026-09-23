@@ -55,9 +55,6 @@ async function uploadImageViaBlobApi(file: File): Promise<string> {
   if (!url) {
     throw new Error("업로드 실패: Blob URL이 없습니다.");
   }
-  if (url.includes("/public/uploads") || url.startsWith("/uploads/")) {
-    throw new Error("로컬 업로드 경로가 반환되었습니다. Vercel Blob /api/upload를 확인하세요.");
-  }
   return url;
 }
 
